@@ -1,0 +1,5 @@
+[package]
+
+name = "elf"
+version = "0.0.1"
+authors = ["Tom Fogal <tfogal@alumni.unh.edu>"]

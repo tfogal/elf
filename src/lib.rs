@@ -1,3 +1,5 @@
+use std::default::Default;
+
 #[test]
 fn testexectype() {
 	let bintrue = elf::read("/bin/true").unwrap();
@@ -12,7 +14,7 @@ fn testexectype() {
 
 #[allow(dead_code)] // stupid f'ing rust doesn't consider test code as "used".
 fn printinfo(fname: &str) {
-	let program = match elf::read(fname) {
+	let program = match read(fname) {
 		None => return,
 		Some(ehdr) => ehdr,
 	};
@@ -28,9 +30,6 @@ fn printinfo(fname: &str) {
 	println!("\t{:-30} {}", "number of sec headers:", program.n_shdr);
 	println!("\t{:-30} {}", "sec header strtable:", program.idx_strtable);
 }
-
-pub mod elf {
-use std::default::Default;
 
 #[deriving(Copy, FromPrimitive, PartialEq, Show)]
 pub enum FileType {
@@ -196,4 +195,3 @@ fn u64_from_le_bytes(data: &[u8], start: uint, size: uint) -> u64 {
 	}
 }
 
-}

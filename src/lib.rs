@@ -64,7 +64,6 @@ pub struct Hdr {
 	pub n_shdr : u16,
 	pub idx_strtable : u16,
 }
-
 impl Default for Hdr {
 	fn default() -> Hdr {
 		Hdr {
@@ -86,6 +85,28 @@ impl Default for Hdr {
 	}
 }
 impl Copy for Hdr {}
+
+pub struct SectionHeader {
+	pub name: u32,
+	pub shtype: u32,
+	pub flags: u64,
+	pub addr: u64, // actually a uintptr... what type should we use for that?
+	pub offset: u64,
+	pub size: u64,
+	pub link: u32,
+	pub info: u32,
+	pub align: u64,
+	pub entsize: u64,
+}
+impl Default for SectionHeader {
+	fn default() -> SectionHeader {
+		SectionHeader {
+			name: 0, shtype: 0, flags:0, addr: 0, offset: 0, size: 0, link: 0,
+			info: 0, align: 0, entsize: 0,
+		}
+	}
+}
+impl Copy for SectionHeader {}
 
 // reads the elf header for the given file.
 pub fn ehdr(filename : &str) -> Option<Hdr> {
@@ -131,6 +152,12 @@ pub fn ehdr(filename : &str) -> Option<Hdr> {
 	hdr.idx_strtable = u16_from_le(bytes, 62);
 
 	return Some(hdr);
+}
+
+pub fn shdr(filename: &str, sidx: uint) -> Option<SectionHeader> {
+	let x: SectionHeader = Default::default();
+	println!("blah: {}, {}", filename, sidx);
+	return Some(x);
 }
 
 fn u16_from_le(data: &[u8], offset : uint) -> u16 {

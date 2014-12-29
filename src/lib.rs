@@ -55,7 +55,7 @@ pub struct Hdr {
 	pub file_type : FileType,
 	pub machine : u16,
 	pub version : u32,
-	pub entry : u64, // really a uintptr... :-/
+	pub entry : uint,
 	pub phdr_offset : u64,
 	pub shdr_offset : u64,
 	pub flags: u32,
@@ -88,11 +88,12 @@ impl Default for Hdr {
 }
 impl Copy for Hdr {}
 
+#[deriving(Show)]
 pub struct SectionHeader {
 	pub name: u32,
 	pub shtype: u32,
 	pub flags: u64,
-	pub addr: u64, // actually a uintptr... what type should we use for that?
+	pub addr: uint,
 	pub offset: u64,
 	pub size: u64,
 	pub link: u32,
@@ -151,9 +152,11 @@ pub fn ehdr(filename : &str) -> Result<Hdr, Error> {
 	let ftype = bytes[16] as u16 | bytes[17] as u16 << 8u;
 	hdr.file_type = FromPrimitive::from_u16(ftype).unwrap();
 
-	hdr.entry = u64_from_le_bytes(bytes, 24, 8);
-	hdr.phdr_offset = u64_from_le_bytes(bytes, 32, 8);
-	hdr.shdr_offset = u64_from_le_bytes(bytes, 40, 8);
+	// make sure that using the u64 as a uint is appropriate.
+	assert!(mem::size_of::<uint>() >= mem::size_of::<u64>());
+	hdr.entry = u64_from_le(bytes, 24) as uint;
+	hdr.phdr_offset = u64_from_le(bytes, 32);
+	hdr.shdr_offset = u64_from_le(bytes, 40);
 	hdr.flags = bytes[48] as u32 <<  0u | bytes[49] as u32 <<  8u |
 	            bytes[50] as u32 << 16u | bytes[51] as u32 << 24u;
 	hdr.ehdr_size = u16_from_le(bytes, 52);
@@ -168,6 +171,7 @@ pub fn ehdr(filename : &str) -> Result<Hdr, Error> {
 
 pub fn shdr(filename: &str, sidx: uint) -> Result<SectionHeader, Error> {
 	use std::io::{File, SeekSet};
+	use std::mem;
 
 	let ehdr = try!(ehdr(filename));
 	if (sidx as u64) >= (ehdr.n_shdr as u64) {
@@ -182,19 +186,37 @@ pub fn shdr(filename: &str, sidx: uint) -> Result<SectionHeader, Error> {
 	let shsz: u64 = ehdr.shdr_size as u64;
 	try!(file.seek((shstart + (sidx as u64)*shsz) as i64, SeekSet));
 
-	let _ = match file.read_exact(shsz as uint) {
+	let bs = match file.read_exact(shsz as uint) {
 		Err(_) => return Err(Error::TomMadeThisUp),
 		Ok(b) => b,
 	};
-	//let bytes = bs.as_slice();
+	let bytes = bs.as_slice();
 
-	let x: SectionHeader = Default::default();
-	println!("blah: {}, {}", filename, sidx);
-	return Ok(x);
+	let mut hdr: SectionHeader = Default::default();
+	hdr.name = u32_from_le(bytes, 0);
+	hdr.shtype = u32_from_le(bytes, 4);
+	hdr.flags = u64_from_le(bytes, 8);
+	// make sure that using the u64 as a uint is appropriate.
+	assert!(mem::size_of::<uint>() >= mem::size_of::<u64>());
+	hdr.addr = u64_from_le(bytes, 16) as uint;
+	hdr.offset = u64_from_le(bytes, 24);
+	hdr.size = u64_from_le(bytes, 32);
+	hdr.link = u32_from_le(bytes, 40);
+	hdr.info = u32_from_le(bytes, 44);
+	hdr.align = u64_from_le(bytes, 48);
+	hdr.entsize = u64_from_le(bytes, 56);
+	return Ok(hdr);
 }
 
-fn u16_from_le(data: &[u8], offset : uint) -> u16 {
+fn u16_from_le(data: &[u8], offset: uint) -> u16 {
 	return data[offset] as u16 << 0u | data[offset+1] as u16 << 8u;
+}
+
+fn u32_from_le(data: &[u8], offset: uint) -> u32 {
+	return data[offset+0] as u32 <<  0u |
+	       data[offset+1] as u32 <<  8u |
+	       data[offset+2] as u32 << 16u |
+	       data[offset+3] as u32 << 24u;
 }
 
 /// Extracts an 8-bit to 64-bit unsigned big-endian value from the given byte
@@ -203,15 +225,11 @@ fn u16_from_le(data: &[u8], offset : uint) -> u16 {
 /// Arguments:
 /// * `data`: The buffer in which to extract the value.
 /// * `start`: The offset at which to extract the value.
-/// * `size`: The size of the value in bytes to extract. This must be 8 or
-/// less, or task panic occurs. If this is less than 8, then only
-/// that many bytes are parsed. For example, if `size` is 4, then a
-/// 32-bit value is parsed.
-fn u64_from_le_bytes(data: &[u8], start: uint, size: uint) -> u64 {
+fn u64_from_le(data: &[u8], start: uint) -> u64 {
 	use std::num::Int;
 	use std::ptr::{copy_nonoverlapping_memory};
 
-	assert!(size <= 8u);
+	let size = 8u;
 	if data.len() - start < size {
 		panic!("index out of bounds");
 	}

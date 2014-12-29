@@ -1,4 +1,6 @@
 use std::default::Default;
+use std::error::FromError;
+use std::io::IoError;
 
 #[deriving(Copy, FromPrimitive, PartialEq, Show)]
 pub enum FileType {
@@ -108,16 +110,26 @@ impl Default for SectionHeader {
 }
 impl Copy for SectionHeader {}
 
+#[deriving(Show)]
+pub enum Error {
+	Io(IoError),
+	Index,
+	Magic,
+	TomMadeThisUp,
+}
+impl FromError<IoError> for Error {
+	fn from_error(err: IoError) -> Error {
+		Error::Io(err)
+	}
+}
+
 // reads the elf header for the given file.
-pub fn ehdr(filename : &str) -> Option<Hdr> {
+pub fn ehdr(filename : &str) -> Result<Hdr, Error> {
 	use std::io::File;
 	use std::mem;
 
 	let path = Path::new(filename);
-	let mut file = match File::open(&path) {
-		Err(err) =>	panic!("could not open {}: {}", path.display(), err.desc),
-		Ok(file) => file,
-	};
+	let mut file = try!(File::open(&path));
 	let bs = match file.read_exact(mem::size_of::<Hdr>()) {
 		Err(err) => panic!("could not read bytes: {}", err.desc),
 		Ok(b) => b,
@@ -128,7 +140,7 @@ pub fn ehdr(filename : &str) -> Option<Hdr> {
 	   bytes[3] != 0x46 {
 		println!("{} is not an ELF file!", filename);
 		println!("b: {:x} {:x} {:x} {:x}", bytes[0], bytes[1], bytes[2], bytes[3]);
-		return None;
+		return Err(Error::Magic);
 	}
 
 	let mut hdr: Hdr = Default::default();
@@ -151,13 +163,34 @@ pub fn ehdr(filename : &str) -> Option<Hdr> {
 	hdr.n_shdr = u16_from_le(bytes, 60);
 	hdr.idx_strtable = u16_from_le(bytes, 62);
 
-	return Some(hdr);
+	return Ok(hdr);
 }
 
-pub fn shdr(filename: &str, sidx: uint) -> Option<SectionHeader> {
+pub fn shdr(filename: &str, sidx: uint) -> Result<SectionHeader, Error> {
+	use std::io::{File, SeekSet};
+
+	let ehdr = try!(ehdr(filename));
+	if (sidx as u64) >= (ehdr.n_shdr as u64) {
+		return Err(Error::Index);
+	}
+	assert!((sidx as u64) < (ehdr.n_shdr as u64));
+
+	let path = Path::new(filename);
+	let mut file = try!(File::open(&path));
+
+	let shstart: u64 = ehdr.shdr_offset as u64;
+	let shsz: u64 = ehdr.shdr_size as u64;
+	try!(file.seek((shstart + (sidx as u64)*shsz) as i64, SeekSet));
+
+	let _ = match file.read_exact(shsz as uint) {
+		Err(_) => return Err(Error::TomMadeThisUp),
+		Ok(b) => b,
+	};
+	//let bytes = bs.as_slice();
+
 	let x: SectionHeader = Default::default();
 	println!("blah: {}, {}", filename, sidx);
-	return Some(x);
+	return Ok(x);
 }
 
 fn u16_from_le(data: &[u8], offset : uint) -> u16 {

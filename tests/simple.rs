@@ -2,10 +2,16 @@ extern crate elf;
 
 #[test]
 fn testexectype() {
-	let bintrue = elf::ehdr("/bin/true").unwrap();
+	let bintrue = match elf::ehdr("/bin/true") {
+		Err(err) => panic!("error getting hdr for /bin/true: {}", err),
+		Ok(hdr) => hdr,
+	};
 	assert_eq!(bintrue.file_type, elf::FileType::Executable);
 
-	let libc = elf::ehdr("/lib/x86_64-linux-gnu/libc.so.6").unwrap();
+	let libc = match elf::ehdr("/lib/x86_64-linux-gnu/libc.so.6") {
+		Err(err) => panic!("error getting libc's header: {}", err),
+		Ok(hdr) => hdr,
+	};
 	assert_eq!(libc.file_type, elf::FileType::Dynamic);
 
 	printinfo("/lib/x86_64-linux-gnu/libc.so.6");
@@ -15,8 +21,8 @@ fn testexectype() {
 #[allow(dead_code)] // stupid f'ing rust doesn't consider test code as "used".
 fn printinfo(fname: &str) {
 	let program = match elf::ehdr(fname) {
-		None => return,
-		Some(ehdr) => ehdr,
+		Err(err) => panic!("error getting {}'s header: {}", fname, err),
+		Ok(ehdr) => ehdr,
 	};
 	println!("{}, {}", fname, program.file_type);
 	println!("\t{:-30} 0x{:x}", "entry:", program.entry);

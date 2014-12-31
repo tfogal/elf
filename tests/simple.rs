@@ -15,8 +15,7 @@ fn testexectype() {
 	};
 	assert_eq!(libc.file_type, elf::FileType::Dynamic);
 
-	printinfo("/lib/x86_64-linux-gnu/libc.so.6");
-	printinfo("/bin/true");
+	//printinfo("/bin/true");
 }
 
 #[test]

@@ -4,11 +4,11 @@ use std::io::IoError;
 
 #[deriving(Copy, FromPrimitive, PartialEq, Show)]
 pub enum FileType {
-	None = 0x0,
-	Relocatable = 0x1,
-	Executable = 0x2,
-	Dynamic = 0x3,
-	Core = 0x4,
+	None = 0,
+	Relocatable = 1,
+	Executable = 2,
+	Dynamic = 3,
+	Core = 4,
 	LoOS = 0xFE00,
 	HiOS = 0xFEFF,
 	LoProc = 0xFF00,
@@ -28,26 +28,6 @@ pub enum SpecialSectionIndex {
 }
 impl Default for SpecialSectionIndex {
 	fn default() -> SpecialSectionIndex { SpecialSectionIndex::Undefined }
-}
-
-#[deriving(Copy, PartialEq)]
-pub enum SectionType {
-	Null = 0,
-	Program = 1,
-	SymTable = 2,
-	StrTable = 3,
-	RelA = 4,
-	Hash = 5,
-	Dynamic = 6,
-	Note = 7,
-	NoBits = 8,
-	Rel = 9,
-	SharedLibrary = 10,
-	DynSymTable = 11,
-	LoOS = 0x60000000,
-	HiOS = 0x6FFFFFFF,
-	LoProc = 0x70000000,
-	HiProc = 0x7FFFFFFF,
 }
 
 pub struct Hdr {
@@ -88,10 +68,37 @@ impl Default for Hdr {
 }
 impl Copy for Hdr {}
 
+#[deriving(Copy, FromPrimitive, PartialEq, Show)]
+pub enum SectionType {
+	Null = 0,
+	Program = 1,
+	SymTable = 2,
+	StrTable = 3,
+	RelA = 4,
+	Hash = 5,
+	Dynamic = 6,
+	Note = 7,
+	NoBits = 8,
+	Rel = 9,
+	SharedLibrary = 10,
+	DynSymTable = 11,
+	InitializeArray = 0xe, // extension, not in ELF spec
+	FinalizeArray = 0xf, // extension, not in ELF spec
+	LoOS = 0x60000000,
+	GnuHash = 0x6FFFFFF6, // extension, not in ELF spec.
+	HiOS = 0x6FFFFFFF,
+	LoProc = 0x70000000,
+	GnuVersionNeed = 0x6ffffffe, // extension, not in ELF spec.
+	HiProc = 0x7FFFFFFF,
+}
+impl Default for SectionType {
+	fn default() -> SectionType { SectionType::Null }
+}
+
 #[deriving(Show)]
 pub struct SectionHeader {
 	pub name: u32,
-	pub shtype: u32,
+	pub shtype: SectionType,
 	pub flags: u64,
 	pub addr: uint,
 	pub offset: u64,
@@ -104,8 +111,8 @@ pub struct SectionHeader {
 impl Default for SectionHeader {
 	fn default() -> SectionHeader {
 		SectionHeader {
-			name: 0, shtype: 0, flags:0, addr: 0, offset: 0, size: 0, link: 0,
-			info: 0, align: 0, entsize: 0,
+			name: 0, shtype: SectionType::Null, flags:0, addr: 0, offset: 0, size: 0,
+			link: 0, info: 0, align: 0, entsize: 0,
 		}
 	}
 }
@@ -194,7 +201,11 @@ pub fn shdr(filename: &str, sidx: uint) -> Result<SectionHeader, Error> {
 
 	let mut hdr: SectionHeader = Default::default();
 	hdr.name = u32_from_le(bytes, 0);
-	hdr.shtype = u32_from_le(bytes, 4);
+	let stype = u32_from_le(bytes, 4);
+	hdr.shtype = match FromPrimitive::from_u32(stype) {
+		None => {println!("stype? {:x}", stype); return Err(Error::TomMadeThisUp)},
+		Some(ty) => ty,
+	};
 	hdr.flags = u64_from_le(bytes, 8);
 	// make sure that using the u64 as a uint is appropriate.
 	assert!(mem::size_of::<uint>() >= mem::size_of::<u64>());
@@ -241,4 +252,3 @@ fn u64_from_le(data: &[u8], start: uint) -> u64 {
 		(*(out as *const u64)).to_le()
 	}
 }
-
